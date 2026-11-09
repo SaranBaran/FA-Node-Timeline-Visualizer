@@ -1,1 +1,8 @@
 .venv/
+
+# Confidential case data — never commit
+data/
+*.xlsx
+*.csv
+web/public/data.json
+.venv/
