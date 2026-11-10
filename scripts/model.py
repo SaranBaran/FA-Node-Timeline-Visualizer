@@ -83,6 +83,9 @@ workbook = load_workbook(filename=ROOT / "data" / "raw" / "Node_FA_Hrant_Dink_v2
 
 sheet = workbook.active
 
+total = sum(1 for row in sheet.iter_rows(min_row=2, values_only=True)
+            if row[NODE_ID] for c in (6, 8, 10) if row[c])
+print("child cells in sheet:", total)
 
 nodes = []
 edges = []
@@ -103,7 +106,7 @@ for row in sheet.iter_rows(min_row=2, values_only=True):
                       cases=row[CASES])
     nodes.append(node)
 
-    for child in range(6,8):
+    for child in range(6,9):
         if row[child]:
             edge = Edge(
                 source= row[NODE_ID],
