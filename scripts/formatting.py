@@ -54,3 +54,9 @@ def to_json(value):
     if isinstance(value, Enum):
         return value.value            
     raise TypeError(f"Can't save {type(value).__name__}")
+
+
+def clean_id(value):
+    if value is None:
+        return ""
+    return str(value).strip().upper()

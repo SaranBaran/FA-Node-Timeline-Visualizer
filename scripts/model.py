@@ -5,7 +5,7 @@ from enum import Enum
 import json
 
 from mapping import NODE_ID, TITLE, DESCRIPTION, FAMILY_INT, SPEC_EVENT, SUSPECTS, DATE, LOC, SUB_LOC, CASES
-from formatting import parse_date, to_json
+from formatting import parse_date, to_json, clean_id
 
 from dataclasses import dataclass, field, asdict
 from datetime import date, datetime
@@ -94,7 +94,7 @@ for row in sheet.iter_rows(min_row=2, values_only=True):
     if not row[NODE_ID]:
         continue
     event_date = parse_date(row[DATE])[0]
-    node = EventNode(id=row[NODE_ID],
+    node = EventNode(id=clean_id(row[NODE_ID]),
                       title=row[TITLE],
                       description=row[DESCRIPTION],
                       start_date = event_date,
@@ -109,8 +109,8 @@ for row in sheet.iter_rows(min_row=2, values_only=True):
     for child in range(6,9):
         if row[child]:
             edge = Edge(
-                source= row[NODE_ID],
-                target=row[child],
+                source=node.id, 
+                target=clean_id(row[child]),
                 label = row[child+3]
             )
             edges.append(edge)
