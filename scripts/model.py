@@ -5,7 +5,7 @@ from enum import Enum
 import json
 
 from mapping import NODE_ID, TITLE, DESCRIPTION, FAMILY_INT, SPEC_EVENT, SUSPECTS, DATE, LOC, SUB_LOC, CASES
-from scripts.formatting import parse_date, to_json
+from formatting import parse_date, to_json
 
 from dataclasses import dataclass, field, asdict
 from datetime import date, datetime
@@ -113,4 +113,7 @@ for row in sheet.iter_rows(min_row=2, values_only=True):
             edges.append(edge)
 
 json_str = json.dumps(asdict(nodes[0]), default=to_json, ensure_ascii=False)
-print(json_str)
+data = {"nodes": [asdict(n) for n in nodes], "edges": [asdict(e) for e in edges]}
+out = ROOT / "web" / "public" / "data.json"
+out.write_text(json.dumps(data, default=to_json, ensure_ascii=False, indent=2), encoding="utf-8")
+print(f"Wrote {len(nodes)} nodes and {len(edges)} edges to {out}")
