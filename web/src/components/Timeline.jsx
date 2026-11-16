@@ -2,11 +2,15 @@
 // this component only turns it into SVG and handles the mouse.
 import { useLayoutEffect, useRef, useState } from "react";
 import * as d3 from "d3";
+import Link from "../model/Link.js";
 import HoverCard from "./HoverCard.jsx";
-import { COLORS, MURDER_DATE } from "./theme.js";
+import { COLORS, MURDER_DATE, LABEL_W } from "./theme.js";
 
-const LABEL_W = 190;   // lane-name column
-const AXIS_H = 30;     // year labels at the bottom
+const AXIS_H = 30;   // year labels at the bottom
+
+// One arrowhead per line colour (an SVG marker can't take its colour from the line).
+const LINK_COLORS = [...new Set([...Object.values(Link.STYLES), Link.UNKNOWN_STYLE].map((s) => s.stroke))];
+const arrowId = (color) => `arrow-${color.slice(1)}`;
 
 export default function Timeline({ data, layout, zoomX, zoomY, selectedId, onSelect }) {
   const scroller = useRef(null);
@@ -23,26 +27,47 @@ export default function Timeline({ data, layout, zoomX, zoomY, selectedId, onSel
     last.current = { zoomX, zoomY };
   }, [zoomX, zoomY]);
 
-  const { width, height, row } = layout;
+  const { width, height } = layout;
   const murderX = layout.xOf(MURDER_DATE);
   const showTitles = zoomX >= 3;
+
+  // The event in focus: the one under the mouse, otherwise the clicked one.
+  const focusId = hover?.node.id ?? selectedId ?? null;
+  const isFocusLink = (link) => link.source === focusId || link.target === focusId;
+  const connected = new Set(focusId ? [focusId] : []);
+  if (focusId) for (const l of data.links) if (isFocusLink(l)) { connected.add(l.source); connected.add(l.target); }
+  // Draw the focused links last, so they lie on top of the faded ones.
+  const links = focusId
+    ? [...data.links.filter((l) => !isFocusLink(l)), ...data.links.filter(isFocusLink)]
+    : data.links;
 
   return (
     <>
       <div ref={scroller} onScroll={() => setHover(null)}
-           style={{ overflow: "auto", maxHeight: "calc(100vh - 170px)", background: COLORS.bg, borderRadius: 8 }}>
+           style={{ overflow: "auto", maxHeight: "calc(100vh - 230px)", background: COLORS.bg, borderRadius: 8 }}>
         <div style={{ display: "flex", width: LABEL_W + width }}>
-          <LaneLabels lanes={layout.lanes} row={row} height={height} />
+          <LaneLabels lanes={layout.lanes} height={height} />
 
           <svg width={width} height={height} style={{ display: "block", flex: "none" }}>
-            {/* lane bands and their tracks */}
+            <defs>
+              {LINK_COLORS.map((c) => (
+                <marker key={c} id={arrowId(c)} viewBox="0 0 10 10" refX="8" refY="5"
+                        markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse" orient="auto">
+                  <path d="M0,0 L10,5 L0,10 z" fill={c} />
+                </marker>
+              ))}
+            </defs>
+
+            {/* lane bands and their rows; the main line is drawn in the lane's colour */}
             {layout.lanes.map((lane, i) => (
               <g key={lane.name}>
                 <rect x={0} y={lane.top - 8} width={width} height={lane.height + 16}
                       fill={i % 2 ? COLORS.band : COLORS.bg} />
-                {Array.from({ length: lane.tracks }, (_, t) => (
-                  <line key={t} x1={0} x2={width} y1={layout.trackY(lane.top, t)}
-                        y2={layout.trackY(lane.top, t)} stroke={COLORS.grid} strokeWidth="0.5" />
+                {layout.rowYs(lane).map((y) => (
+                  <line key={y} x1={0} x2={width} y1={y} y2={y}
+                        stroke={y === lane.center ? lane.color : COLORS.grid}
+                        strokeOpacity={y === lane.center ? 0.45 : 1}
+                        strokeWidth={y === lane.center ? 1.5 : 0.5} />
                 ))}
               </g>
             ))}
@@ -57,19 +82,23 @@ export default function Timeline({ data, layout, zoomX, zoomY, selectedId, onSel
             <line x1={murderX} x2={murderX} y1={0} y2={height} stroke={COLORS.murder} strokeDasharray="2 3" />
             <text x={murderX + 4} y={14} fontSize="11" fill={COLORS.murder}>19.01.2007</text>
 
-            {/* links */}
-            {data.links.map((link) => {
+            {/* links: bright when they touch the focused event, faded otherwise */}
+            {links.map((link) => {
               const d = layout.connectorPath(link);
               if (!d) return null;
               const s = link.style;
-              return <path key={link.key} d={d} fill="none" stroke={s.stroke}
-                           strokeWidth={s.width} strokeDasharray={s.dash} />;
+              const active = focusId !== null && isFocusLink(link);
+              const opacity = focusId === null ? 0.8 : active ? 1 : 0.1;
+              return <path key={link.key} d={d} fill="none" stroke={s.stroke} opacity={opacity}
+                           strokeWidth={active ? s.width + 1.2 : s.width} strokeDasharray={s.dash}
+                           markerEnd={`url(#${arrowId(s.stroke)})`} />;
             })}
 
             {/* events */}
             {data.datedNodes.map((node) => (
               <EventMarker key={node.id} node={node} pos={layout.positionOf(node.id)}
-                           selected={node.id === selectedId} showTitle={showTitles}
+                           selected={node.id === selectedId} showTitle={showTitles || node.id === focusId}
+                           faded={focusId !== null && !connected.has(node.id)}
                            onClick={() => onSelect(node.id)}
                            onHover={(e) => setHover({ node, mouseX: e.clientX, mouseY: e.clientY })}
                            onLeave={() => setHover(null)} />
@@ -86,11 +115,11 @@ export default function Timeline({ data, layout, zoomX, zoomY, selectedId, onSel
 }
 
 // One event: a diamond, an optional title, and a larger invisible area that catches the mouse.
-function EventMarker({ node, pos, selected, showTitle, onClick, onHover, onLeave }) {
+function EventMarker({ node, pos, selected, showTitle, faded, onClick, onHover, onLeave }) {
   const r = node.special ? 5.5 : 4;
   return (
     <g onClick={onClick} onMouseEnter={onHover} onMouseMove={onHover} onMouseLeave={onLeave}
-       style={{ cursor: "pointer" }}>
+       style={{ cursor: "pointer" }} opacity={faded ? 0.25 : 1}>
       <circle cx={pos.x} cy={pos.y} r={10} fill="transparent" />
       <rect x={pos.x - r} y={pos.y - r} width={r * 2} height={r * 2}
             transform={`rotate(45 ${pos.x} ${pos.y})`}
@@ -104,8 +133,8 @@ function EventMarker({ node, pos, selected, showTitle, onClick, onHover, onLeave
   );
 }
 
-// Lane names: stick to the left edge when scrolling sideways.
-function LaneLabels({ lanes, row, height }) {
+// Lane names: stick to the left edge when scrolling sideways, sit on the lane's main line.
+function LaneLabels({ lanes, height }) {
   return (
     <svg width={LABEL_W} height={height}
          style={{ position: "sticky", left: 0, zIndex: 2, flex: "none",
@@ -114,8 +143,8 @@ function LaneLabels({ lanes, row, height }) {
         const name = lane.name.toLocaleUpperCase("tr");
         return (
           <g key={lane.name}>
-            <rect x={8} y={lane.top + row / 2 - 10} width={LABEL_W - 16} height={20} rx={3} fill={lane.color} />
-            <text x={14} y={lane.top + row / 2 + 4} fontSize="11" fontWeight="600" fill="#111">
+            <rect x={8} y={lane.center - 10} width={LABEL_W - 16} height={20} rx={3} fill={lane.color} />
+            <text x={14} y={lane.center + 4} fontSize="11" fontWeight="600" fill="#111">
               {name.length > 22 ? name.slice(0, 21) + "…" : name}
             </text>
             <title>{lane.name}</title>

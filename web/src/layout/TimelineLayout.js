@@ -3,25 +3,26 @@
 import * as d3 from "d3";
 
 export default class TimelineLayout {
-  static BASE_WIDTH = 1400;  // width of the time axis at zoom 1
+  static DEFAULT_WIDTH = 1400;  // width of the time axis at zoom 1, if no width is given
   static PAD_X = 30;
   static TOP = 30;
   static ROW = 26;           // between sub-tracks, at row-zoom 1
   static LANE_GAP = 34;      // between lanes, at row-zoom 1
   static MIN_GAP = 9;        // at zoom 1, closer events go on a new sub-track
 
-  constructor(data, grouping, zoomX = 1, zoomY = 1) {
+  // baseWidth = how wide the time axis is at zoom 1 (normally: the width of the screen area)
+  constructor(data, grouping, zoomX = 1, zoomY = 1, baseWidth = TimelineLayout.DEFAULT_WIDTH) {
     this.data = data;
     this.grouping = grouping;
-    this.width = TimelineLayout.BASE_WIDTH * zoomX;
+    this.width = baseWidth * zoomX;
     this.row = TimelineLayout.ROW * zoomY;
     this.laneGap = TimelineLayout.LANE_GAP * zoomY;
 
     const dated = data.datedNodes;
-    const { PAD_X, BASE_WIDTH } = TimelineLayout;
+    const { PAD_X } = TimelineLayout;
     // The base scale (zoom 1) decides the sub-tracks, so lanes don't jump when zooming.
     this.xBase = d3.scaleUtc().domain(d3.extent(dated, (n) => n.date))
-      .range([PAD_X, BASE_WIDTH - PAD_X]).nice();
+      .range([PAD_X, baseWidth - PAD_X]).nice();
     this.x = this.xBase.copy().range([PAD_X, this.width - PAD_X]);
 
     this.positions = new Map();   // node id -> {x, y}
@@ -93,12 +94,16 @@ export default class TimelineLayout {
   xOf(isoDate) { return this.x(new Date(isoDate)); }
 
   // A right-angle connector: across, turn just after the start, then across (like Miro).
+  // A right-angle connector, like on the Miro wall: across, turn just after the parent,
+  // then across to the child. It stops just before the child so the arrowhead stays visible.
   connectorPath(link) {
     const a = this.positionOf(link.source);
     const b = this.positionOf(link.target);
-    if (!a || !b) return null;                 // one end has no date
-    if (Math.abs(a.y - b.y) < 0.5) return `M${a.x},${a.y} H${b.x}`;
-    const turn = b.x >= a.x ? a.x + Math.min(14, (b.x - a.x) / 2) : a.x + 14;
-    return `M${a.x},${a.y} H${turn} V${b.y} H${b.x}`;
+    if (!a || !b) return null;                       // one end has no date
+    const forward = b.x >= a.x;
+    const turn = forward ? a.x + Math.min(14, (b.x - a.x) / 2) : a.x + 14;
+    const end = b.x >= turn ? b.x - 7 : b.x + 7;     // stop in front of the diamond
+    if (Math.abs(a.y - b.y) < 0.5) return `M${a.x + 5},${a.y} H${end}`;
+    return `M${a.x},${a.y} H${turn} V${b.y} H${end}`;
   }
 }

@@ -14,3 +14,4 @@ export const COLORS = {
 };
 
 export const MURDER_DATE = "2007-01-19";
+export const LABEL_W = 190;   // width of the lane-name column on the left
