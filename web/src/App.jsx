@@ -4,7 +4,7 @@ import TimelineLayout from "./layout/TimelineLayout.js";
 import { GROUPINGS, groupingByKey } from "./layout/groupings.js";
 import Timeline from "./components/Timeline.jsx";
 import ZoomControl from "./components/ZoomControl.jsx";
-import DetailPanel from "./components/DetailPanel.jsx";
+import DetailPanel, { PANEL_W } from "./components/DetailPanel.jsx";
 import Legend from "./components/Legend.jsx";
 import { COLORS, LABEL_W } from "./components/theme.js";
 
@@ -15,6 +15,9 @@ export default function App() {
   const [zoomX, setZoomX] = useState(1);
   const [zoomY, setZoomY] = useState(1);
   const [selectedId, setSelectedId] = useState(null);
+  const [fullChain, setFullChain] = useState(false);   // highlight everything an event leads to
+  const [chain, setChain] = useState(null);            // {id, number, total}: where a running chain is
+  const [centerOn, setCenterOn] = useState(null);      // {id, n}: "zoom to this event" request
   const [areaWidth, setAreaWidth] = useState(1400 + LABEL_W);   // width of the timeline box on screen
   const area = useRef(null);
 
@@ -42,11 +45,20 @@ export default function App() {
   if (error) return <p>Could not load data.json: {error}</p>;
   if (!data) return <p>Loading…</p>;
 
-  const selected = data.get(selectedId);
+  // The side panel shows the chain's current event while a chain runs, otherwise the clicked event.
+  const shown = data.get(chain?.id ?? selectedId);
+
+  // Zoom in around one event and put it in the middle of the screen.
+  const zoomTo = (id) => {
+    setZoomX((z) => Math.max(z, 6));
+    setZoomY((z) => Math.max(z, 1.5));
+    setCenterOn((c) => ({ id, n: (c?.n ?? 0) + 1 }));
+  };
 
   return (
     <main style={{ fontFamily: "system-ui, sans-serif", padding: 16, background: COLORS.page,
-                   color: COLORS.text, minHeight: "100vh" }}>
+                   color: COLORS.text, minHeight: "100vh",
+                   paddingRight: shown ? PANEL_W + 16 : 16 }}>   {/* room for the side panel */}
       <h1 style={{ margin: "0 0 8px", fontSize: 22 }}>
         Hrant Dink Timeline{" "}
         <span style={{ fontSize: 14, fontWeight: 400, color: COLORS.muted }}>
@@ -65,17 +77,22 @@ export default function App() {
         <ZoomControl label="Time ↔" value={zoomX} onChange={setZoomX} max={12} />
         <ZoomControl label="Rows ↕" value={zoomY} onChange={setZoomY} max={4} />
         <button onClick={() => { setZoomX(1); setZoomY(1); }}>Fit</button>
+        <label title="When on, clicking an event lights up every event it leads to, one after another, and the side panel follows along">
+          <input type="checkbox" checked={fullChain} onChange={(e) => setFullChain(e.target.checked)} />{" "}
+          Show where it leads (full chain)
+        </label>
       </div>
 
       <div ref={area} style={{ marginTop: 12 }}>
         <Timeline data={data} layout={layout} zoomX={zoomX} zoomY={zoomY}
-                  selectedId={selectedId} onSelect={setSelectedId} />
+                  selectedId={selectedId} onSelect={setSelectedId} fullChain={fullChain}
+                  centerOn={centerOn} onChainStep={setChain} />
         <Legend />
       </div>
 
-      {selected && (
-        <DetailPanel node={selected} data={data} onSelect={setSelectedId}
-                     onClose={() => setSelectedId(null)} />
+      {shown && (
+        <DetailPanel node={shown} data={data} onSelect={setSelectedId} onZoom={zoomTo}
+                     chain={chain} onClose={() => setSelectedId(null)} />
       )}
     </main>
   );

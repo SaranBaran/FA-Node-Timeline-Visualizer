@@ -1,12 +1,12 @@
 // The little card that follows the mouse over an event.
 import { COLORS } from "./theme.js";
 
-const CARD_W = 340;
+const CARD_W = 360;
 
 export default function HoverCard({ node, data, mouseX, mouseY }) {
   // Show the card right of and below the mouse, but flip it if it would leave the window.
   const left = mouseX + 16 + CARD_W > window.innerWidth ? mouseX - 16 - CARD_W : mouseX + 16;
-  const top = Math.min(mouseY + 16, window.innerHeight - 320);
+  const top = Math.min(mouseY + 16, window.innerHeight - 360);
 
   const incoming = data.linksTo(node.id);
   const outgoing = data.linksFrom(node.id);
@@ -15,7 +15,7 @@ export default function HoverCard({ node, data, mouseX, mouseY }) {
 
   return (
     <div style={{
-      position: "fixed", left, top, width: CARD_W, zIndex: 10, pointerEvents: "none",
+      position: "fixed", left, top, width: CARD_W, zIndex: 30, pointerEvents: "none",
       background: "#262626", color: COLORS.text, border: `1px solid ${COLORS.border}`,
       borderRadius: 8, padding: "10px 12px", fontSize: 12.5, lineHeight: 1.45,
       boxShadow: "0 8px 24px rgba(0,0,0,.45)",
@@ -30,9 +30,14 @@ export default function HoverCard({ node, data, mouseX, mouseY }) {
         </div>
       )}
 
-      <Row label="Where">{[node.institution, node.city].filter(Boolean).join(", ") || "—"}</Row>
-      {node.suspects.length > 0 && <Row label="Suspects">{node.suspects.join(", ")}</Row>}
-      {node.cases.length > 0 && <Row label="Cases">{node.cases.join("; ")}</Row>}
+      {/* always shown, so an empty value is visible as "none" instead of a missing row */}
+      <Row label={node.cases.length > 1 ? "Cases" : "Case"}>
+        {node.cases.length ? node.cases.join("; ") : <None>no case given</None>}
+      </Row>
+      <Row label="Suspects">
+        {node.suspects.length ? node.suspects.join(", ") : <None>none named</None>}
+      </Row>
+      <Row label="Where">{[node.institution, node.city].filter(Boolean).join(", ") || <None>—</None>}</Row>
       <Row label="Links">{incoming.length} in · {outgoing.length} out</Row>
 
       {description && <p style={{ margin: "8px 0 0", color: "#d4d4d4" }}>{description}</p>}
@@ -41,17 +46,20 @@ export default function HoverCard({ node, data, mouseX, mouseY }) {
   );
 }
 
-// One "label: value" line in the card.
 function Row({ label, children }) {
   return (
-    <div style={{ display: "flex", gap: 8 }}>
+    <div style={{ display: "flex", gap: 8, marginTop: 2 }}>
       <span style={{ color: COLORS.muted, width: 62, flex: "none" }}>{label}</span>
       <span>{children}</span>
     </div>
   );
 }
 
-// A small outlined tag, like "family intervention".
+// Grey text for an empty value.
+function None({ children }) {
+  return <span style={{ color: COLORS.muted, fontStyle: "italic" }}>{children}</span>;
+}
+
 function Tag({ color, children }) {
   return (
     <span style={{ display: "inline-block", border: `1px solid ${color}`, color, borderRadius: 4,

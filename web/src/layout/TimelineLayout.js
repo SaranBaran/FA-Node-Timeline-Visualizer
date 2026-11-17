@@ -26,34 +26,44 @@ export default class TimelineLayout {
     this.x = this.xBase.copy().range([PAD_X, this.width - PAD_X]);
 
     this.positions = new Map();   // node id -> {x, y}
-    this.lanes = [];              // {name, color, top, height, center, rowsAbove, rowsBelow}
+    this.lanes = [];              // {name, color, top, height, center, rowsAbove, rowsBelow, ...}
     this.#placeLanes(dated);
   }
 
-  // Inside each lane: family interventions above the main line,
-  // all other events on the main line (or just below it when they would overlap).
+  // Inside each lane, from top to bottom:
+  //   family interventions (above the main line)
+  //   the main line: events that lead on to other events (overflow goes just below it)
+  //   extension rows: events that are only another part of an event on the main line
   #placeLanes(dated) {
-    const groups = d3.group(dated, (n) => this.grouping.laneOf(n));
+    // An extension goes in the lane of its main event, so the two stay together.
+    const groups = d3.group(dated, (n) => this.grouping.laneOf(this.data.mainEventOf(n)));
     let top = TimelineLayout.TOP;
     for (const name of this.grouping.order(groups.keys(), groups)) {
       const nodes = [...groups.get(name)].sort((a, b) => a.startDate.localeCompare(b.startDate));
       const family = nodes.filter((n) => n.familyIntervention);
-      const others = nodes.filter((n) => !n.familyIntervention);
+      const rest = nodes.filter((n) => !n.familyIntervention);
+      const extensions = rest.filter((n) => this.data.isExtension(n.id));
+      const main = rest.filter((n) => !this.data.isExtension(n.id));
 
-      const familyTrack = this.#packIntoTracks(family);   // 0 = first row above the main line
-      const otherTrack = this.#packIntoTracks(others);    // 0 = the main line, 1+ = below it
+      const familyTrack = this.#packIntoTracks(family);         // 0 = first row above the main line
+      const mainTrack = this.#packIntoTracks(main);             // 0 = the main line, 1+ = just below it
+      const extensionTrack = this.#packIntoTracks(extensions);  // 0 = first extension row
       const rowsAbove = TimelineLayout.#count(familyTrack);
-      const rowsBelow = Math.max(0, TimelineLayout.#count(otherTrack) - 1);
+      const mainRows = Math.max(1, TimelineLayout.#count(mainTrack));
+      const extensionRows = TimelineLayout.#count(extensionTrack);
+      const rowsBelow = mainRows - 1 + extensionRows;
 
       const center = top + this.row / 2 + rowsAbove * this.row;   // y of the main line
       const lane = {
         name, top, center,
         color: this.grouping.colorOf(name, nodes),
         height: (rowsAbove + 1 + rowsBelow) * this.row,
-        rowsAbove, rowsBelow,
+        rowsAbove, rowsBelow, mainRows, extensionRows,
+        extensionY: extensionRows ? center + mainRows * this.row : null,   // first extension row
       };
       for (const n of family) this.#place(n, center - (familyTrack.get(n.id) + 1) * this.row);
-      for (const n of others) this.#place(n, center + otherTrack.get(n.id) * this.row);
+      for (const n of main) this.#place(n, center + mainTrack.get(n.id) * this.row);
+      for (const n of extensions) this.#place(n, center + (mainRows + extensionTrack.get(n.id)) * this.row);
 
       this.lanes.push(lane);
       top += lane.height + this.laneGap;
@@ -80,26 +90,30 @@ export default class TimelineLayout {
     return trackOf;
   }
 
-  // The y of every row in a lane, from the top: family rows, the main line, then the rows below.
-  rowYs(lane) {
-    const ys = [];
-    for (let k = lane.rowsAbove; k >= 1; k--) ys.push(lane.center - k * this.row);
-    ys.push(lane.center);
-    for (let k = 1; k <= lane.rowsBelow; k++) ys.push(lane.center + k * this.row);
-    return ys;
+  // Every row in a lane, from the top, with what kind of row it is:
+  // "family", "main" (the main line itself), "overflow" (just below it) or "extension".
+  rows(lane) {
+    const rows = [];
+    for (let k = lane.rowsAbove; k >= 1; k--) rows.push({ y: lane.center - k * this.row, kind: "family" });
+    rows.push({ y: lane.center, kind: "main" });
+    for (let k = 1; k <= lane.rowsBelow; k++) {
+      rows.push({ y: lane.center + k * this.row, kind: k < lane.mainRows ? "overflow" : "extension" });
+    }
+    return rows;
   }
 
   positionOf(id) { return this.positions.get(id) ?? null; }
   get years() { return this.x.ticks(d3.utcYear.every(1)); }
   xOf(isoDate) { return this.x(new Date(isoDate)); }
 
-  // A right-angle connector: across, turn just after the start, then across (like Miro).
   // A right-angle connector, like on the Miro wall: across, turn just after the parent,
   // then across to the child. It stops just before the child so the arrowhead stays visible.
+  // An extension hangs straight down from its parent instead (same day, so same x).
   connectorPath(link) {
     const a = this.positionOf(link.source);
     const b = this.positionOf(link.target);
     if (!a || !b) return null;                       // one end has no date
+    if (link.isExtension) return `M${a.x},${a.y} V${b.y} H${b.x}`;
     const forward = b.x >= a.x;
     const turn = forward ? a.x + Math.min(14, (b.x - a.x) / 2) : a.x + 14;
     const end = b.x >= turn ? b.x - 7 : b.x + 7;     // stop in front of the diamond

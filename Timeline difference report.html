@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Timeline Difference Report</title>
+<style>
+  :root { --ink:#1f2328; --muted:#5b6370; --line:#d8dde3; --soft:#f4f6f8; --acc:#1f3864; --r:#7a2e2e; --g:#235c34; }
+  body { margin:0; background:#fff; color:var(--ink); font:15px/1.55 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 40px 20px 80px; }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 28px; }
+  h2 { font-size: 20px; margin: 40px 0 10px; padding-top: 12px; border-top: 1px solid var(--line); }
+  h3 { font-size: 16px; margin: 22px 0 6px; }
+  p { margin: 8px 0; }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0 6px; font-size: 14px; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { background: var(--soft); font-weight: 600; }
+  td:first-child { font-weight: 600; width: 19%; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .card { border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; }
+  .card h3 { margin-top: 2px; }
+  ul { margin: 6px 0; padding-left: 20px; }
+  li { margin: 3px 0; }
+  .note { background: #fff8e6; border: 1px solid #ecd59a; border-radius: 6px; padding: 10px 14px; font-size: 14px; }
+  .tag { display:inline-block; font-size: 12px; padding: 1px 7px; border-radius: 10px; background: var(--soft); border: 1px solid var(--line); }
+  code { background: var(--soft); padding: 1px 4px; border-radius: 3px; font-size: 13px; }
+  @media (max-width: 720px) { .cols { grid-template-columns: 1fr; } td:first-child { width: auto; } }
+  @media print { main { padding: 0; } h2 { break-after: avoid; } .card, tr { break-inside: avoid; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Timeline difference report</h1>
+  <p class="sub">Robert’s <strong>Combined Timeline view v27</strong> (built 11.11.2026, database v13) compared with the
+  <strong>FA Node Timeline Visualizer</strong> (Sarya, state of 17.11.2026). Written from the two code bases; no case
+  details beyond counts are reproduced here.</p>
+
+  <h2>1. In one sentence each</h2>
+  <div class="cols">
+    <div class="card">
+      <h3>Combined Timeline v27 (Robert)</h3>
+      <p>A full research instrument: the whole Miro wall plus the Mural context layer, people, dockets and absences,
+      generated from a CSV database into one offline HTML file, with review and editing tools for the team.</p>
+    </div>
+    <div class="card">
+      <h3>Node Timeline Visualizer (Sarya)</h3>
+      <p>A focused reader for one hand-built node sheet (one Miro board): events, their links and the family’s
+      interventions, with a small, object-oriented React code base that is easy to change and test.</p>
+    </div>
+  </div>
+
+  <h2>2. At a glance</h2>
+  <table>
+    <tr><th></th><th>Combined Timeline v27</th><th>Node Timeline Visualizer</th></tr>
+    <tr><td>Scope</td><td>1,847 events: 532 legal (500 from the Miro wall + 32 judicial-harassment rows from the Mural) and 1,315 context events; 2004 → 2026</td><td>69 events from one node spreadsheet (one Miro board)</td></tr>
+    <tr><td>Links</td><td>540 (two types: <em>follows</em> 383, <em>relationship</em> 157), each with a phase, a drawn shape, a confidence and sources</td><td>76 links with 7 labels from the sheet (regular relation, authorization process, criminal investigation, criminal case, lack of jurisdiction, appeal, extension)</td></tr>
+    <tr><td>Other entities</td><td>183 dockets, 137 people, 786 participation spans, 1,690 appearances, 523 ghost (absence) periods, 15 crime-scene elements, 72 family interventions, 12 panels, 19 relations, review items</td><td>None as separate tables; suspects, cases, city and institution are text fields on each event</td></tr>
+    <tr><td>Dates</td><td>Start date + precision (day / month / year / window) + original date text</td><td>One date per event (by design)</td></tr>
+    <tr><td>Languages</td><td>Turkish and English for titles, texts and the whole interface (TR / EN switch)</td><td>Turkish titles from the sheet, English interface</td></tr>
+    <tr><td>Provenance</td><td><code>source_ids</code>, <code>basis</code> and <code>status</code> on most rows (all legal events are still <em>draft</em>); 46 links that run back in time and 28 lines without a card are flagged</td><td>None yet</td></tr>
+    <tr><td>Pipeline</td><td><code>build_db.py</code> (~1,800 lines) → CSV database → <code>build_view.py</code> → one HTML file with the data inside</td><td><code>model.py</code> (openpyxl) → <code>data.json</code> → React app</td></tr>
+    <tr><td>Tech</td><td>Plain JavaScript + SVG in a single file (12.6 MB, of which ~450 KB is code; ~400 functions, one global state object)</td><td>React + Vite + D3 scales; classes for the data (<code>EventNode</code>, <code>Link</code>, <code>TimelineData</code>), layout (<code>TimelineLayout</code>, <code>Grouping</code> subclasses) and marks (<code>EventMark</code>)</td></tr>
+    <tr><td>Running it</td><td>Double-click the HTML; no server. A content-security policy blocks every network request</td><td><code>npm run dev</code> (local server); <code>data.json</code> is kept out of git</td></tr>
+  </table>
+
+  <h2>3. Time axis and layout</h2>
+  <table>
+    <tr><th></th><th>Combined Timeline v27</th><th>Node Timeline Visualizer</th></tr>
+    <tr><td>Time → x</td><td>Taken from the cards’ positions on the Miro wall (monotone, piecewise-linear through the day-dated cards); the murder week 16–22.01.2007 is widened. A “Time scale” slider moves between the wall’s spacing and a true calendar scale</td><td>True calendar scale (D3 UTC scale); horizontal zoom 1–12×</td></tr>
+    <tr><td>Chapters</td><td>Pre-murder, Murder (16–22.01.2007), Legal I, Legal II (after the coup attempt of 15.07.2016), with boundary lines</td><td>One red line at 19.01.2007</td></tr>
+    <tr><td>Rows</td><td>Two legal layouts: <strong>Wall layout</strong> (the rows of the Miro wall) and <strong>By location</strong> (city channels, one sub-channel per body, ordered to minimise link crossings). Context bands above and below; a bottom “absent from the legal process” channel. Bands can be dragged into a new order</td><td>Lanes chosen from a menu: institution type (5 lanes), city, institution, case, or none. In each lane: family interventions above the main line, main events on it, same-day parts in a shaded strip below</td></tr>
+    <tr><td>Zoom</td><td>Mouse wheel / pinch around the cursor, drag to pan, Fit</td><td>Separate sliders for time and rows, scrollbars, Fit; the view stays centred when zooming</td></tr>
+  </table>
+
+  <h2>4. Visual language</h2>
+  <table>
+    <tr><th></th><th>Combined Timeline v27</th><th>Node Timeline Visualizer</th></tr>
+    <tr><td>Marks</td><td>The node shape from the wall for each card: white diamond = investigation opened, double ring = trial opened, circle = step, dot = card without node, bar = end; colour = court level (first instance, regional appeal, Cassation, Constitutional Court, ECtHR, permission, jurisdiction). Red ring = family intervention, red star = new evidence, case outcomes as separate symbols</td><td>From the Nov 2026 Miro legend sheet, as far as the data allows: diamond = event, white star = turning point, red hollow square = Dink family, grey hollow circle = same-day part</td></tr>
+    <tr><td>Lines</td><td>Line style by phase (investigation dotted, trial solid, permission yellow dashed, jurisdiction purple dashed, appeal in the colour of the target court, thin relationship lines); drawn as S-curves along the wall’s lines; stubs for lines that end or leave the wall</td><td>Line style by the sheet’s link label, with Miro colours; right-angle connectors with arrowheads; same-day parts hang straight down without an arrow</td></tr>
+    <tr><td>Extra layers</td><td>Docket boxes (cases), confidentiality spans, family overlay on the boxes, people lines (one per person, up to 8), ghost periods, crime-scene elements, panels P1–P12 with a summary band, struggle ↔ legal connectors, greyscale switch per layer</td><td>None beyond events and links</td></tr>
+    <tr><td>Legend</td><td>Long, written legend in the side panel (Legal / Context / People / Panels), largely in prose</td><td>Short legend under the timeline, drawn by the same code as the timeline, so it cannot drift from it</td></tr>
+  </table>
+  <p class="note"><strong>Worth raising:</strong> the two use different family-intervention marks. v27 draws a <em>red ring</em>; the
+  Nov 2026 legend sheet (Legend_for_Miro-DY) says <em>red hollow square</em>. The Visualizer follows the sheet. Also,
+  v27’s diamond means “investigation opened”, while in the Visualizer a diamond is any event, because the node sheet has
+  no stage column.</p>
+
+  <h2>5. Interaction</h2>
+  <table>
+    <tr><th></th><th>Combined Timeline v27</th><th>Node Timeline Visualizer</th></tr>
+    <tr><td>Search</td><td>Search titles, texts, names and dockets with suggestions</td><td>—</td></tr>
+    <tr><td>Hover</td><td>Tooltip text</td><td>Card with id, date, title, place, suspects, cases, link counts and description; its links light up and the rest fades</td></tr>
+    <tr><td>Selection</td><td>Click an event, person, docket, body, panel or group; the Details tab shows all fields and links; the rest fades. Focus = the event and its <em>direct</em> neighbours</td><td>Click opens a side panel with “Comes from / Leads to” buttons to walk the chain</td></tr>
+    <tr><td>Chains</td><td>—</td><td><strong>“Show where it leads (full chain)”</strong>: lights up everything an event leads to, one step at a time, and names the end points</td></tr>
+    <tr><td>People</td><td>People tab: tick up to 8 people to draw their path through cases and absences</td><td>Suspects listed as text on each event</td></tr>
+    <tr><td>Filters</td><td>Layers on / off / grey, context categories, proposed / candidate / grey rows, significance of people</td><td>Lane grouping only</td></tr>
+    <tr><td>Editing &amp; review</td><td>Review mode: decide accept / fix / unknown per item, notes, add or delete links in the browser, export the feedback as an HTML file; settings kept in the browser</td><td>— (edits happen in the spreadsheet)</td></tr>
+  </table>
+
+  <h2>6. What each one has that the other does not</h2>
+  <div class="cols">
+    <div class="card">
+      <h3>Only in v27</h3>
+      <ul>
+        <li>The whole wall (500 legal cards) plus 1,315 context events</li>
+        <li>People, dockets, participation, absences and crime-scene elements as data</li>
+        <li>Per-event stage, court level and node shape, so the Miro symbols can be drawn</li>
+        <li>Date precision and the original date text</li>
+        <li>Sources, basis and status on the data; conflict checks</li>
+        <li>Location channels with crossing-minimised ordering</li>
+        <li>TR / EN, search, filters, greyscale, panels</li>
+        <li>Review mode with export; link editing</li>
+        <li>Runs as one file with the network blocked</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Only in the Visualizer</h3>
+      <ul>
+        <li>Full-chain view, animated step by step</li>
+        <li>Lanes that can be regrouped (institution type, city, institution, case)</li>
+        <li>Family interventions always above their lane’s main line</li>
+        <li>Same-day parts separated from the main line</li>
+        <li>Rich hover card and a navigable side panel</li>
+        <li>Arrowheads that show direction</li>
+        <li>Legend generated from the drawing code</li>
+        <li>Small, modular, object-oriented code that can be tested piece by piece from the terminal</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>7. Trade-offs</h2>
+  <ul>
+    <li><strong>Completeness vs readability.</strong> v27 shows everything at once, which makes it the better research
+      tool and a dense first view. The Visualizer shows less but is easier to read for one board.</li>
+    <li><strong>Generated vs hand-written code.</strong> v27’s view is one large generated file. That is easy to ship and
+      safe offline, but hard to change by hand. The Visualizer is easy to change, but needs Node and a dev server, and has
+      no build into a single offline file yet.</li>
+    <li><strong>Data model.</strong> v27’s database is the richer and more careful model: dates with precision, separate
+      people and dockets, provenance. The Visualizer’s sheet is simpler and faster to fill in by hand.</li>
+  </ul>
+
+  <h2>8. Possible next steps (options, not decisions)</h2>
+  <ul>
+    <li>Feed the Visualizer from v27’s database: its events and links CSVs instead of the node sheet. That would bring in
+      the 532 legal events, and with them <code>process_stage</code> and <code>node_shape</code>, which are needed to draw
+      the Miro stage symbols.</li>
+    <li>Offer the full-chain view and the same-day separation to Robert as candidates for v28.</li>
+    <li>Agree with the team on one family-intervention mark (ring or square).</li>
+    <li>Add a build step that packs the Visualizer into a single offline HTML file, like v27, so it can be shared under the
+      same confidentiality rule.</li>
+  </ul>
+</main>
+</body>
+</html>
